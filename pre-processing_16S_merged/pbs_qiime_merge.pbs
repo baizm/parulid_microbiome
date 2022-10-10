@@ -1,0 +1,67 @@
+#!/bin/bash
+
+#PBS -l nodes=1:ppn=10,walltime=2:00:00,feature=rhel7
+#PBS -j oe
+#PBS -m abe
+#PBS -M mdb5946@psu.edu
+#PBS -A wff3_a_g_hc_default
+
+# Go to the correct place
+
+cd $PBS_O_WORKDIR
+
+module load python/3.6.8
+module load anaconda3
+source activate /storage/home/mdb5946/.conda/envs/qiime2-2020.8
+
+#merge filtererd data from 2017-2019 library with 2020 library (batch 1 + batch 2)
+qiime feature-table merge \
+  --i-tables /gpfs/group/dut374/default/marcella/16s_2020samples/feature_table_no_contam.qza \
+  --i-tables /gpfs/group/dut374/default/marcella/16s2_ny/silva/feature_table_no_contam.qza \
+  --o-merged-table feature_table_merged.qza
+
+qiime feature-table merge-seqs \
+  --i-data /gpfs/group/dut374/default/marcella/16s_2020samples/rep-seqs_no_contam.qza \
+  --i-data /gpfs/group/dut374/default/marcella/16s2_ny/silva/rep-seqs_no_contam.qza \
+  --o-merged-data rep-seqs_merged.qza
+
+qiime feature-table merge-taxa \
+  --i-data /gpfs/group/dut374/default/marcella/16s_2020samples/silva_taxonomy.qza \
+  --i-data /gpfs/group/dut374/default/marcella/16s2_ny/silva/silva_taxonomy.qza \
+  --o-merged-data silva_taxonomy_merged.qza
+
+#summarize new feature tabulate
+qiime feature-table summarize \
+  --i-table feature_table_merged.qza \
+  --o-visualization feature_table_merged.qzv
+
+#visualize
+qiime feature-table tabulate-seqs \
+  --i-data rep-seqs_merged.qza \
+  --o-visualization rep-seqs_merged.qzv
+
+qiime metadata tabulate \
+  --m-input-file silva_taxonomy_merged.qza \
+  --o-visualization silva_taxonomy_merged.qzv
+#don't forget to download tsv of silva_taxonomy.qzv from qiime2 view
+
+#generate a tree for phylogenetic diversity analyses
+qiime phylogeny align-to-tree-mafft-fasttree \
+  --i-sequences rep-seqs_merged.qza \
+  --o-alignment aligned-rep-seqs_merged.qza \
+  --o-masked-alignment masked-aligned-rep-seqs_merged.qza \
+  --o-tree unrooted-tree_merged.qza \
+  --o-rooted-tree rooted-tree_merged.qza
+
+#export feature table to otu table (puts it in a folder called out-table.biom)
+qiime tools export \
+  --input-path feature_table_merged.qza \
+  --output-path otu_table_merged
+
+#convert to tsv file for phyloseq
+biom convert -i  ./otu_table_merged/feature-table.biom -o ./otu_table_merged/feature-table.tsv --to-tsv
+
+#export tree for phyloseq
+qiime tools export \
+  --input-path rooted-tree_merged.qza \
+  --output-path exported-tree_merged
