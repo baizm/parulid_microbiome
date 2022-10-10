@@ -14,18 +14,6 @@ module load python/3.6.8
 module load anaconda3
 source activate /storage/home/mdb5946/.conda/envs/qiime2-2020.8
 
-#filter out mithochondrial, chloroplast and unassigned ASVs, AND eukaryota
-#qiime taxa filter-table \
-#  --i-table ../feature_table.qza \
-#  --i-taxonomy silva_taxonomy.qza \
-#  --p-exclude mitochondria,chloroplast,unassigned,eukaryota \
-#  --o-filtered-table feature_table_no_MtCpUnEuk.qza
-
-#summarize new feature tabulate
-#qiime feature-table summarize \
-#  --i-table feature_table_no_MtCpUnEuk.qza \
-#  --o-visualization feature_table_no_MtCpUnEuk.qzv
-
 #filter out contaminant ASVs from decontam
 qiime feature-table filter-features \
   --i-table feature_table_no_MtCpUnEuk.qza \
@@ -57,8 +45,7 @@ qiime phylogeny align-to-tree-mafft-fasttree \
   --o-tree unrooted-tree_silva.qza \
   --o-rooted-tree rooted-tree_silva.qza
 
-#produce alpha-rarefaction curve, --p-max-depth based on feature_table_no_MtCpUn.qzv (3rd quartile is 37k, 21 is median)
-#7 samples below 1000 sequences (after filtering...remove these?, curves look pretty flat)
+#produce alpha-rarefaction curve
 qiime diversity alpha-rarefaction \
   --i-table feature_table_no_contam.qza \
   --i-phylogeny rooted-tree_silva.qza \
@@ -78,4 +65,3 @@ biom convert -i  ./otu_table_silva.biom/feature-table.biom -o ./otu_table_silva.
 qiime tools export \
   --input-path rooted-tree_silva.qza \
   --output-path exported-tree_silva
-
