@@ -51,12 +51,7 @@ SAM = sample_data(sampledata)
 physeq = phyloseq(OTU, TAX, SAM, tree)
 #sums of OTUs across samples
 taxa_sums(physeq)
-#alpha - tells me I don't have singletons...is this suspicious?
 plot_richness(physeq, x="Species", color="Species",measures="Shannon") + theme(legend.position="none") 
-
-
-#uni<-distance(physeq, method='unifrac') ###issues STILLLLLL
-##use physeq to calculate CORE microbiome, after filtering out <4k depth samples, below
 
 #write file of pruned warblers for qiime filtering
 #prune species with < 4 indiv 
@@ -64,8 +59,6 @@ l4<-c('BLPW','BWWA','GWWA','LOWA','NOWA','PIWA','YEWA') #species with less than 
 #new pruned dataset removing poorly sampled species
 physeq2<-prune_samples(!(grepl(paste(l4,collapse='|'),sample_data(physeq)$Species)), physeq)
 write.csv(rownames(physeq2@sam_data), './qiime_diversity/samples_to_keep.txt',quote=F,row.names=F)
-
-
 
 ####---------find samples to remove due to low read counts & negatives-------------
 #make data frame with total read counts after filtering using sample_sums
@@ -83,8 +76,7 @@ rarecurve(t(otu_table(physeq)), step=50, lwd=0.8, label=F, xlab='Read count',
 #data frame of samples with reads below threshold
 low<-sdt[which(sdt$TotalReads<4000),]
 table(low$Species) 
-table(physeq@sam_data$Species) #for comparison, it looks like mostly removes from species that already have a lot of individuals (except GWWA)
-sdt[which(sdt$Species=='GWWA'),] #but the two have ridiculously low read counts anyway
+table(physeq@sam_data$Species) 
 table(low$Type) #includes neg controls and 81 pos samples
 
 #make vector of samples to keep
@@ -101,21 +93,7 @@ abline(h=4, col='red')
 min(sample_sums(ps2)) #4020
 max(sample_sums(ps2)) #155961
 
-
-###--------identify the core microbiome, general warbler GM -----------
-core<-data.frame(ps2@otu_table) #make a copy of non-rarefied OTU table
-core[core==0]<-NA #turn zeros to NA
-core$sumNA<-rowSums(is.na(core)) #add column of sums of NAs per row
-summary(core$sumNA) #min is 66, meaning present in (169-66=103) 103/169, or 61% of individuals
-core2<-core[which(core$sumNA<84),] #in more than half of the individuals, only 1 OTU: 63afe8e6aac58bf0d670a82ca5bc574c
-core3<-core[order(core$sumNA),]
-core3$prev<-c((169-core3$sumNA)/169) #add column of prevalence (proportion of individuals with this ASV)
-core3$sum<-rowSums(core3[,1:169], na.rm=T)
-which(core3$sumNA==169)
-
-
 save.image('phyloseq4.RData')
-
 
 ##do in qiime2----------------
 ###create rarefied data set=ps3
@@ -134,7 +112,7 @@ core3<-core[order(core$sumNA),]
 core3$prev<-c((169-core3$sumNA)/169) #add column of prevalence (proportion of individuals with this ASV)
 core3$sum<-rowSums(core3[,1:169], na.rm=T)
 which(core3$sumNA==169)
-zo1<-which(core3$sum==0) #same as above. indexes of rows, remove all these OTUs
+zo1<-which(core3$sum==0) 
 ro1<-rownames(core3[zo1,]) #otus to remove from ps2.1 bc prevalence is zero
 
 hist(core3$prev,breaks=50, xlab="prevalence across individuals",main='')
@@ -189,8 +167,6 @@ grid.arrange(an+ggtitle("non-rarefied"),ar+ggtitle('rarefied'),ncol=1) #alpha di
 alpha_r<-estimate_richness(ps3.11, measures=c('Shannon','Observed'))
 kruskal.test(alpha_r$Observed, sample_data(ps3.11)$Species) #Kruskal-Wallis chi-squared = 20.115, df = 13, p-value = 0.09237
 
-
-
 #plot distinguishing only top 10 phyla
 topp2.11<-as.data.frame(ps2.11@tax_table)
 sort(table(topp2.11$Phylum), decreasing=T)
@@ -232,56 +208,7 @@ ggplot(mglom3.11, aes(x = sample_Species, y = Abundance, fill = Phylum)) +
 #dev.off()
 
 ####-----------beta diversity-----------------------------
-#test for effect of year and state to see if I can pool
-#calculate distance matrix non-rare
-bray2.11<-distance(ps2.11, method='bray')
-#and unifrac
-uni2.11<-distance(ps2.11, method='unifrac')
-#and weighted unifrac
-wuni2.11<-distance(ps2.11, method='wunifrac')
-
-##is error bc of multibranching?? https://github.com/joey711/phyloseq/issues/936
-edges=phy_tree(ps3.11)$edge
-mycounts = table(edges[,1]) # Source nodes; 1st column of edge matrix
-length(mycounts[mycounts ==2]) # Number of nodes with exactly 2 children
-#[1] 4970
-length(mycounts[mycounts !=2]) # Number of nodes with more or fewer children
-#[1] 6
-mycounts[mycounts !=2] # How many nodes each of the above has
-#no...can't figure it out. Export back to qiime?
-#to do once in qiime
-#rarefy
-#remove contaminant ASVs
-#create subset of pruned warbler spp.
-#diversity stats
-
-
-
-
-#make dataframe from sample data
-md2.1<-data.frame(sample_data(ps2.1), row.names=rownames(sample_data(ps2.1)))
-md2.1$Year<-as.factor(md2.1$Year) #make non-continuous
-ps2.1@sam_data$Year<-as.factor(ps2.1@sam_data$Year) #make non-continuous
-md2.1$doy<-yday(as.Date(md2.1$Date, '%m/%d/%y')) #make day of year column
-#adonis tests, non-rare
-a1<-adonis(bray2.1 ~ Year*Species, data=md2.1) #non-significant interaction, can combine years?
-a2<-adonis(bray2.1 ~ State*Species, data=md2.1) #interaction significant, cannot combine NY-PA?
-dis1<-permutest(betadisper(bray2.1, md2.1$Year)) #non-significant, adonis result not due to differences in group dispersions?
-dis2<-permutest(betadisper(bray2.1, md2.1$State)) #non-significant, adonis result not due to differences in group dispersions?
-a3<-adonis(uni2.1 ~ Year*Species, data=md2.1) #non-significant interaction, can combine years?
-a4<-adonis(uni2.1 ~ State*Species, data=md2.1) #non-significant, can combine NY-PA?
-dis3<-permutest(betadisper(uni2.1, md2.1$Year)) #significant, adonis result could be due to differences in group dispersions? But year not sig....so doesn't matter?
-dis4<-permutest(betadisper(uni2.1, md2.1$State)) #non-significant, adonis result not due to differences in group dispersions?
-a5<-adonis(wuni2.1 ~ Year*Species, data=md2.1) #non-significant interaction, can combine years?
-a6<-adonis(wuni2.1 ~ State*Species, data=md2.1) #not-significant interaction, can combine NY-PA?
-dis5<-permutest(betadisper(wuni2.1, md2.1$Year)) #non-significant, adonis result not due to differences in group dispersions? 
-dis6<-permutest(betadisper(wuni2.1, md2.1$State)) #non-significant, adonis result not due to differences in group dispersions?
-#write to file output of test for year, state, non-rare
-beta_out1<-capture.output(print(a1),print(a2),print(dis1),print(dis2),
-                          print(a3),print(a4),print(dis3),print(dis4),
-                          print(a5),print(a6),print(dis5),print(dis6))
-writeLines(beta_out1, con = file("result_NR_YearState.txt"))
-
+#test for effect of year and state 
 ##calculate distance matrix rarefied
 bray3.11<-distance(ps3.11, method='bray')
 #and unifrac
@@ -294,64 +221,12 @@ md3.11$Year<-as.factor(md3.11$Year) #make non-continuous
 ps3.11@sam_data$Year<-as.factor(ps3.11@sam_data$Year) #make non-continuous
 md3.11$doy<-yday(as.Date(md3.11$Date, '%m/%d/%y')) #make day of year column
 plot(alpha_r$Observed~md3.11$doy, col=factor(md3.11$Species))
-pdf(file='~/Documents/Academic stuff/faculty_interview_stuff/BoiseState/temporal.pdf', height=4, width=5)
+
 plot(alpha_r$Observed~md3.11$doy, xlab='Day', ylab='Diversity', lwd=2)
-dev.off()
+
 fit <- lm(alpha_r$Observed~poly(md3.11$doy,2,raw=TRUE))
 summary(fit)
 
-md3.11$temporal[md3.11$doy < 160]<-'early'
-md3.11$temporal[md3.11$doy > 170]<-'late'
-md3.11$temporal[md3.11$doy <= 170 & md3.11$doy >= 160]<-'mid'
-md3.11$observed<-alpha_r$Observed
-boxplot(md3.11$observed~md3.11$temporal)
-summary(aov(md3.11$observed~md3.11$temporal))
-#try coding mid point based on each species max observed date
-
-#adonis tests, rare
-a7<-adonis(bray3.11 ~ Year*Species, data=md3.11) #non-significant interaction, can combine years?
-a8<-adonis(bray3.11 ~ State*Species, data=md3.11) #interaction significant, cannot combine NY-PA?
-dis7<-permutest(betadisper(bray3.11, md3.11$Year)) #non-significant, adonis result not due to differences in group dispersions?
-dis8<-permutest(betadisper(bray3.11, md3.11$State)) #non-significant, adonis result not due to differences in group dispersions?
-a9<-adonis(uni3.11 ~ Year*Species, data=md3.11) #non-significant interaction, can combine years?
-a10<-adonis(uni3.11 ~ State*Species, data=md3.11) #non-significant, can combine NY-PA?
-dis9<-permutest(betadisper(uni3.11, md3.11$Year)) #non-significant
-dis10<-permutest(betadisper(uni3.11, md3.11$State)) #non-significant, adonis result not due to differences in group dispersions?
-a11<-adonis(wuni3.11 ~ Year*Species, data=md3.11) #non-significant interaction, can combine years?
-a12<-adonis(wuni3.11 ~ State*Species, data=md3.11) #not-significant interaction, can combine NY-PA?
-dis11<-permutest(betadisper(wuni3.11, md3.11$Year)) #non-significant, adonis result not due to differences in group dispersions? 
-dis12<-permutest(betadisper(wuni3.11, md3.11$State)) #non-significant, adonis result not due to differences in group dispersions?
-#write to file output of test for year, state, non-rare
-beta_out2<-capture.output(print(a7),print(a8),print(dis7),print(dis8),
-                          print(a9),print(a10),print(dis9),print(dis10),
-                          print(a11),print(a12),print(dis11),print(dis12))
-writeLines(beta_out2, con = file("result_R_YearState.txt"))
- 
-#use unname(matrix) or adonis2 to avoid error!
-adonis(bray3.11 ~ Species, data=md3.11) #r2=0.09282, p=0.022***
-plot(betadisper(bray3.11, md3.11$Species), hull=F, ellipse=T, col=pal)
-permutest(betadisper(bray3.11, md3.11$Species)) #ns F=0.703, p=0.762
-adonis(bray3.11 ~ State, data=md3.11) #r2=0.01881, p=0.001***
-permutest(betadisper(bray3.11, md3.11$State)) #ns F=0.7587, p=0.397
-adonis(bray3.11 ~ Year, data=md3.11) #r2=0.01545, p=0.081
-permutest(betadisper(bray3.11, md3.11$Year)) #ns p=0.17
-
-adonis(uni3.11 ~ Species, data=md3.11) #r2=0.10604, p=0.001***
-plot(betadisper(uni3.11, md3.11$Species))
-plot(betadisper(uni3.11, md3.11$Species), hull=F, ellipse=T)
-permutest(betadisper(uni3.11, md3.11$Species)) # F=3.0492, p=0.002***
-adonis(uni3.11 ~ State, data=md3.11) #r2=0.0115, p=0.005***
-plot(betadisper(uni3.11, md3.11$State))
-permutest(betadisper(uni3.11, md3.11$State)) #ns F=0.0019, p=0.971
-adonis(uni3.11 ~ Year, data=md3.11) #r2=0.01618, p=0.027***
-permutest(betadisper(uni3.11, md3.11$Year)) #ns F=2.2121, p=0.099
-
-adonis(wuni3.11 ~ Species, data=md3.11) #r2=0.08393, p=0.414
-permutest(betadisper(wuni3.11, md3.11$Species)) #p=0.004***
-adonis(wuni3.11 ~ State, data=md3.11) #r2=0.01744, p=0.048***
-permutest(betadisper(wuni3.11, md3.11$State)) #ns F=0.1831, p=0.655
-adonis(wuni3.11 ~ Year, data=md3.11) #r2=0.01555, p=0.292
-permutest(betadisper(wuni3.11, md3.11$Year)) #ns p=0.918
 
 #make supp fig of betadispers
 pdf(file='betadisper_1_2017-2019.pdf', height=5, width=5)
@@ -396,8 +271,6 @@ rownames(md3.1)<-rownames(ps3.1@sam_data)
 ps2.1@sam_data$Genus<-md2.1$genus
 ps3.1@sam_data$Genus<-md3.1$genus
 
-
-
 #look at ordination plot
 library(randomcoloR)
 #palette<-distinctColorPalette(14)
@@ -420,101 +293,16 @@ plot_ordination(ps3.11, ord_b, color='Species', shape = "State", title = "", typ
   scale_color_manual(values=pal) + geom_point(size=3) + theme(axis.text = element_text(size = 14)) +
   theme_bw() + theme(axis.text = element_text(size = 11)) + labs(shape="Locality", colour="Species")
 dev.off()
-#ordinate(ps3.11, "PCoA", "bray") %>% 
-#  plot_ordination(ps3.11, ., color='Species', shape = "State", title = "Bray-Curtis (rarefied)", type='samples') +
-#  scale_color_manual(values=palette) + geom_point(size=3) +
-#  theme_bw()
 ord_u<-ordinate(ps3.11, "PCoA", "unifrac")
 plot_ordination(ps3.11, ord_u, color='Species', shape = "State", title = "Unifrac (rarefied)", type='samples') +
   scale_color_manual(values=pal) + geom_point(size=3) +
   theme_bw()
-#ordinate(ps3.11, "PCoA", "unifrac") %>% 
-#  plot_ordination(ps3.11, ., color='Species', shape = "State", title = "Unifrac (rarefied)", type='samples') +
-#  scale_color_manual(values=palette) + geom_point(size=3) +
-#  theme_bw()
 ordinate(ps3.11, "PCoA", "wunifrac") %>% 
   plot_ordination(ps3.11, ., color='Species', shape = "State", title = "Weighted Unifrac (rarefied)", type='samples') +
   scale_color_manual(values=palette) + geom_point(size=3) +
   theme_bw()
 
-
-ordinate(ps2.1, "PCoA", "bray") %>% 
-  plot_ordination(ps2.1, ., color='Species', shape = "State", title = "Bray-Curtis (non-rarefied)", type='samples') +
-  scale_color_manual(values=c('antiquewhite4', 'aquamarine4', 'azure4','black','blue4',
-                              'brown1','burlywood','chartreuse4','cornflowerblue','darkgoldenrod',
-                              'darkgray','darkviolet','khaki','lightpink4')) +
-  geom_point(size=2)
-#+ stat_ellipse()
-#+scale_shape_manual(values=c(1,2)) + geom_point(aes(size=Year))
-
-##some test imply effect of state, so subset dataset and re-test with even sampling
-
-
-
-#playing around with merging to get average OTU abundance by species, see https://joey711.github.io/phyloseq/merge.html
-test<-merge_samples(ps2.1, "Species")
-
-####-----take a closer look at effect of year by subsetting----------------------------------
-###look at species sampled well across each year (only in NY, at least 2 each year), rarefied
-table(md3.11$Species,md3.11$Year,md3.11$State) #AMRE,BTBW,BTNW,CAWA,MYWA,NAWA,NOPA,OVEN
-yrk<-c('AMRE','BTBW','BTNW','CAWA','MYWA','NAWA','NOPA','OVEN') #spp with at least indv in each year
-#yrk<-c('MYWA') #look at one at a time
-yr<-md3.11[which(md3.11$Species %in% yrk & md3.11$State=="NY"),]
-psyr<-prune_samples(rownames(yr), ps3.11)
-#looks like years overlap generally
-ordinate(psyr, "PCoA", "bray") %>% 
-  plot_ordination(psyr, ., color='Species', shape = "Year", title = "Year Bray-Curtis", type='samples') +
-  scale_color_manual(values=palette)+
-  geom_point(size=3)
-yr1<-md3.11[which(md3.11$Species=="AMRE" & md3.11$State=="NY"),]
-psyr1<-prune_samples(rownames(yr1), ps3.11)
-yr2<-md3.11[which(md3.11$Species=="BTBW" & md3.11$State=="NY"),]
-psyr2<-prune_samples(rownames(yr2), ps3.11)
-yr3<-md3.11[which(md3.11$Species=="BTNW" & md3.11$State=="NY"),]
-psyr3<-prune_samples(rownames(yr3), ps3.11)
-yr4<-md3.11[which(md3.11$Species=="CAWA" & md3.11$State=="NY"),]
-psyr4<-prune_samples(rownames(yr4), ps3.11)
-yr5<-md3.11[which(md3.11$Species=="MYWA" & md3.11$State=="NY"),]
-psyr5<-prune_samples(rownames(yr5), ps3.11)
-yr6<-md3.11[which(md3.11$Species=="NAWA" & md3.11$State=="NY"),]
-psyr6<-prune_samples(rownames(yr6), ps3.11)
-yr7<-md3.11[which(md3.11$Species=="NOPA" & md3.11$State=="NY"),]
-psyr7<-prune_samples(rownames(yr7), ps3.11)
-yr8<-md3.11[which(md3.11$Species=="OVEN" & md3.11$State=="NY"),]
-psyr8<-prune_samples(rownames(yr8), ps3.11)
-
-#plot separate species
-y1<-ordinate(psyr1, "PCoA", "bray") %>% 
-  plot_ordination(psyr1, ., color='Year', shape = "Species", title = "AMRE", type='samples') +
-  scale_color_manual(values=c('deeppink', 'cornflowerblue','black')) + geom_point(size=4)
-y2<-ordinate(psyr2, "PCoA", "bray") %>% 
-  plot_ordination(psyr2, ., color='Year', shape = "Species", title = "BTBW", type='samples') +
-  scale_color_manual(values=c('deeppink', 'cornflowerblue','black')) + geom_point(size=4)
-y3<-ordinate(psyr3, "PCoA", "bray") %>% 
-  plot_ordination(psyr3, ., color='Year', shape = "Species", title = "BTNW", type='samples') +
-  scale_color_manual(values=c('deeppink', 'cornflowerblue','black')) + geom_point(size=4)
-y4<-ordinate(psyr4, "PCoA", "bray") %>% 
-  plot_ordination(psyr4, ., color='Year', shape = "Species", title = "CAWA", type='samples') +
-  scale_color_manual(values=c('deeppink', 'cornflowerblue','black')) + geom_point(size=4)
-y5<-ordinate(psyr5, "PCoA", "bray") %>% 
-  plot_ordination(psyr5, ., color='Year', shape = "Species", title = "MYWA", type='samples') +
-  scale_color_manual(values=c('deeppink', 'cornflowerblue','black')) + geom_point(size=4)
-y6<-ordinate(psyr6, "PCoA", "bray") %>% 
-  plot_ordination(psyr6, ., color='Year', shape = "Species", title = "NAWA", type='samples') +
-  scale_color_manual(values=c('deeppink', 'cornflowerblue','black')) + geom_point(size=4)
-y7<-ordinate(psyr7, "PCoA", "bray") %>% 
-  plot_ordination(psyr7, ., color='Year', shape = "Species", title = "NOPA", type='samples') +
-  scale_color_manual(values=c('deeppink', 'cornflowerblue','black')) + geom_point(size=4)
-y8<-ordinate(psyr8, "PCoA", "bray") %>% 
-  plot_ordination(psyr8, ., color='Year', shape = "Species", title = "OVEN", type='samples') +
-  scale_color_manual(values=c('deeppink', 'cornflowerblue','black')) + geom_point(size=4)
-pdf(file='year_sppNY_rarefied.pdf', height=8, width=8)
-grid.arrange(y1,y2,y3,y4,y5,y6,y7,y8,ncol=2)
-dev.off()
-
-
 #abundance plot for AOS
-#pdf(file='~/Documents/Conferences:Presentations/AOS-SCO2021/abundance_microbiome.pdf', height=5, width=5)
 pdf(file='abundance_microbiome_2017-2019.pdf', height=5, width=5.2)
 level_order<-c('BTNW','MYWA','CSWA','BLBW','MAWA','NOPA','BTBW','AMRE','HOWA','CAWA','COYE','NAWA','BAWW','WEWA','OVEN')
 ggplot(mglom3.11, aes(x = factor(sample_Species, level=level_order), y = Abundance, fill = Phylum)) + 
@@ -539,7 +327,7 @@ kruskal.test(alpha_r$Observed, sample_data(ps3.11)$Species) #Kruskal-Wallis chi-
 kruskal.test(alpha_r$Shannon, sample_data(ps3.11)$Species) #Kruskal-Wallis chi-squared = 16.354, df = 13, p-value = 0.2305
 kruskal.test(alpha_r$PD, sample_data(ps3.11)$Species) #Kruskal-Wallis chi-squared = 18.764, df = 13, p-value = 0.1306
 
-###-----core again maybe?_------
+###-----core again------
 core<-data.frame(ps3.11@otu_table) #make a copy of rarefied OTU table
 core[core==0]<-NA #turn zeros to NA
 core$sumNA<-rowSums(is.na(core)) #add column of sums of NAs per row
@@ -559,67 +347,15 @@ prevtab$prev <- core3$prev[match(rownames(prevtab), rownames(core3))]
 clost<-prevtab[which(prevtab$Class=='c__Clostridia'),]
 clost<-clost[order(clost$prev, decreasing = T),] #all are <10% prevalence
 
-
 hist(core3$prev, breaks=100, ylim=c(0,100))
 summary(core3$prev)
 core30<-ps3.11@tax_table[which(rownames(ps3.11@tax_table) %in% rownames(core4)),] #OTUs present in > 30% of individuals
 #write.csv(core30, 'core30_2017-2019.csv')
 
-
-####-------------take a closer look at state by subsetting------------------
-
 save.image('phyloseq4.RData')
 
 
-
-
-
-
-
 ####=----------functions-----------------
-## Summarizes data.
-## Gives count, mean, standard deviation, standard error of the mean, and confidence interval (default 95%).
-##   data: a data frame.
-##   measurevar: the name of a column that contains the variable to be summariezed
-##   groupvars: a vector containing names of columns that contain grouping variables
-##   na.rm: a boolean that indicates whether to ignore NA's
-##   conf.interval: the percent range of the confidence interval (default is 95%)
-summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
-                      conf.interval=.95, .drop=TRUE) {
-  library(plyr)
-  
-  # New version of length which can handle NA's: if na.rm==T, don't count them
-  length2 <- function (x, na.rm=FALSE) {
-    if (na.rm) sum(!is.na(x))
-    else       length(x)
-  }
-  
-  # This does the summary. For each group's data frame, return a vector with
-  # N, mean, and sd
-  datac <- ddply(data, groupvars, .drop=.drop,
-                 .fun = function(xx, col) {
-                   c(N    = length2(xx[[col]], na.rm=na.rm),
-                     mean = mean   (xx[[col]], na.rm=na.rm),
-                     sd   = sd     (xx[[col]], na.rm=na.rm)
-                   )
-                 },
-                 measurevar
-  )
-  
-  # Rename the "mean" column    
-  datac <- rename(datac, c("mean" = measurevar))
-  
-  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
-  
-  # Confidence interval multiplier for standard error
-  # Calculate t-statistic for confidence interval: 
-  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
-  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
-  datac$ci <- datac$se * ciMult
-  
-  return(datac)
-}
-
 #####myplotbetadisp.r
 ###from https://pastebin.com/qhjvZmhB
 myplotbetadisper <- function (x, axes = c(1, 2), cex = 0.7, pch = seq_len(ng), col = NULL, 
@@ -856,8 +592,6 @@ adonis2(wuni3.11 ~ Species+State+Year, data=md3.11, by='margin')
 #state r2=0.01748, p=0.039
 #year r2=0.00776, p=0.732
 
-
-
 #for supplement
 pdf(file='betadisper_3_2017-2019_v2.pdf', height=5, width=5)
 myplotbetadisper(betadisper(jac3.11, md3.11$Species), ellipse = TRUE, hull = FALSE, 
@@ -866,9 +600,9 @@ myplotbetadisper(betadisper(jac3.11, md3.11$Species), ellipse = TRUE, hull = FAL
                  main= "Jaccard", coltextrect=pal, label.cex=0.6)
 dev.off()
 
-adonis2(jac3.11 ~ Species+State+Year, data=md3.11, by='margin') #working right here...can report margin results for batch 1, but not full dataset?
+adonis2(jac3.11 ~ Species+State+Year, data=md3.11, by='margin') 
 
-#export distance matricies for mantel tests with cytb
+#export distance matricies for mantel tests with evolutionary distance
 #batch 1 dataset
 saveRDS(bray3.11, file='bray_b1.rds')
 saveRDS(jac3.11, file='jac_b1.rds')
@@ -979,7 +713,7 @@ dim(oven_c) #only 7 of 9
 rownames(core30)[(which(!(rownames(core30) %in% rownames(oven_c))))]
 #"9477d45e83a2f8d1f61fd3cb9db73a0f"-f__Beijerinckiaceae "90f44084459949dd4fd965e1fc355026"-"g__1174-901-12" 
 
-#make individual-level relative abundance plots for supp?
+#make individual-level relative abundance plots for supplement
 level_order2<-data.frame(id=mglom3.11$Sample,species=mglom3.11$sample_Species)
 orders<-data.frame(species=level_order, order=1:15)
 orders<-orders[-14,] #get rid of wewa
