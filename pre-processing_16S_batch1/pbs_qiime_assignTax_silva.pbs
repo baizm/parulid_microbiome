@@ -1,0 +1,41 @@
+#!/bin/bash
+
+#PBS -l nodes=1:ppn=20,walltime=6:00:00,feature=rhel7
+#PBS -j oe
+#PBS -m abe
+#PBS -M mdb5946@psu.edu
+#PBS -A wff3_a_g_hc_default
+
+# Go to the correct place
+
+cd $PBS_O_WORKDIR
+
+module load python/3.6.8
+module load anaconda3
+source activate /storage/home/mdb5946/.conda/envs/qiime2-2020.8
+
+#downloaded silva qza files from: https://docs.qiime2.org/2020.11/data-resources/ 
+
+#train the classifier
+#qiime feature-classifier fit-classifier-naive-bayes \
+#  --i-reference-reads silva-138-99-seqs-515-806.qza \
+#  --i-reference-taxonomy silva-138-99-tax-515-806.qza \
+#  --o-classifier silva_classifier.qza
+
+#use the classifier
+qiime feature-classifier classify-sklearn \
+  --i-classifier silva_classifier.qza \
+  --i-reads ../rep-seqs.qza \
+  --p-n-jobs 4 \
+  --o-classification silva_taxonomy.qza
+
+qiime metadata tabulate \
+  --m-input-file silva_taxonomy.qza \
+  --o-visualization silva_taxonomy.qzv
+
+#visualize classified sequences
+qiime taxa barplot \
+  --i-table ../feature_table.qza \
+  --i-taxonomy silva_taxonomy.qza \
+  --m-metadata-file ../metadata2_16s_ny.tsv \
+  --o-visualization taxa-bar-plots.qzv
