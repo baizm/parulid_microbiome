@@ -1,0 +1,86 @@
+###---------------with all individuals, same as core dataset--------------
+qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny rooted-tree_silva.qza \
+  --i-table feature_table_no_contam.qza \
+  --p-sampling-depth 4020 \
+  --m-metadata-file ../../../../metadata2_16s_ny.tsv \
+  --output-dir core-metrics-results
+
+qiime tools export \
+  --input-path ./core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+  --output-path exported_unifrac
+
+###---------with singleton warbler species removed-------------------
+#create new feature table with singleton warblers removed
+qiime feature-table filter-samples \
+  --i-table feature_table_no_contam.qza \
+  --m-metadata-file samples_to_keep.txt \
+  --o-filtered-table id-filtered-table.qza
+
+qiime feature-table summarize \
+  --i-table id-filtered-table.qza \
+  --o-visualization id-filtered-table.qzv
+
+qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny rooted-tree_silva.qza \
+  --i-table id-filtered-table.qza \
+  --p-sampling-depth 4020 \
+  --m-metadata-file ../../../../metadata2_16s_ny.tsv \
+  --output-dir core-metrics-results_filtered
+
+qiime feature-table summarize \
+  --i-table ./core-metrics-results_filtered/rarefied_table.qza \
+  --o-visualization ./core-metrics-results_filtered/rarefied_table.qzv #161 samples - check!
+
+##group by mean ceiling (rounds up so you don't have fractions of OTUs)
+qiime feature-table group \
+--i-table ./core-metrics-results_filtered/rarefied_table.qza \
+--o-grouped-table ./core-metrics-results_filtered/rarefied_table_grouped.qza \
+--p-mode mean-ceiling \
+--m-metadata-file ../../../../metadata2_16s_ny.tsv \
+--m-metadata-column Species \
+--p-axis sample
+
+qiime feature-table summarize \
+  --i-table ./core-metrics-results_filtered/rarefied_table_grouped.qza \
+  --o-visualization ./core-metrics-results_filtered/rarefied_table_grouped.qzv
+
+# core-metrics-phylogenetic requires rarefying and I already did, so calculate distance matrices separately
+qiime diversity beta-phylogenetic \
+  --i-phylogeny rooted-tree_silva.qza \
+  --i-table ./core-metrics-results_filtered/rarefied_table_grouped.qza \
+  --p-metric unweighted_unifrac \
+  --o-distance-matrix ./core-metrics-results_filtered/grouped_beta/grouped_unifrac.qza
+
+qiime tools export \
+  --input-path ./core-metrics-results_filtered/grouped_beta/grouped_unifrac.qza \
+  --output-path ./core-metrics-results_filtered/grouped_beta/exported_unifrac
+
+qiime diversity beta-phylogenetic \
+  --i-phylogeny rooted-tree_silva.qza \
+  --i-table ./core-metrics-results_filtered/rarefied_table_grouped.qza \
+  --p-metric weighted_unifrac \
+  --o-distance-matrix ./core-metrics-results_filtered/grouped_beta/grouped_weightedunifrac.qza
+
+qiime tools export \
+  --input-path ./core-metrics-results_filtered/grouped_beta/grouped_weightedunifrac.qza \
+  --output-path ./core-metrics-results_filtered/grouped_beta/exported_weightedunifrac
+
+qiime diversity beta \
+  --i-table ./core-metrics-results_filtered/rarefied_table_grouped.qza \
+  --p-metric braycurtis \
+  --o-distance-matrix ./core-metrics-results_filtered/grouped_beta/grouped_braycurtis.qza
+
+qiime tools export \
+  --input-path ./core-metrics-results_filtered/grouped_beta/grouped_braycurtis.qza \
+  --output-path ./core-metrics-results_filtered/grouped_beta/exported_braycurtis
+
+##add jaccard
+qiime diversity beta \
+  --i-table ./core-metrics-results_filtered/rarefied_table_grouped.qza \
+  --p-metric jaccard \
+  --o-distance-matrix ./core-metrics-results_filtered/grouped_beta/grouped_jaccard.qza
+
+qiime tools export \
+  --input-path ./core-metrics-results_filtered/grouped_beta/grouped_jaccard.qza \
+  --output-path ./core-metrics-results_filtered/grouped_beta/exported_jaccard
