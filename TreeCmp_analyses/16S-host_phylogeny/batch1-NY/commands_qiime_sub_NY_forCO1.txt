@@ -1,0 +1,64 @@
+####build distance matricies also for CO1 comparision using TreeCmp
+###start from feature table with singleton spp. removed and rarefied to 4020 (after this step below)
+#filter to NY birds only, from file (also HOWA removed bc not in CO1 dataset)
+qiime feature-table filter-samples \
+  --i-table ../core-metrics-results_filtered/rarefied_table.qza \
+  --m-metadata-file NY_ids.txt \
+  --o-filtered-table NY-filtered-table.qza
+
+qiime feature-table summarize \
+  --i-table NY-filtered-table.qza \
+  --o-visualization NY-filtered-table.qzv
+
+##group each by mean ceiling (rounds up so you don't have fractions of OTUs)
+qiime feature-table group \
+  --i-table NY-filtered-table.qza \
+  --o-grouped-table NY_grouped.qza \
+  --p-mode mean-ceiling \
+  --m-metadata-file ../../../../../metadata2_16s_ny.tsv \
+  --m-metadata-column Species \
+  --p-axis sample
+
+qiime feature-table summarize \
+  --i-table NY_grouped.qza \
+  --o-visualization NY_grouped.qzv
+
+####finally re-calculate distance matrices
+qiime diversity beta-phylogenetic \
+  --i-phylogeny ../rooted-tree_silva.qza \
+  --i-table NY_grouped.qza \
+  --p-metric unweighted_unifrac \
+  --o-distance-matrix NY_grouped_unifrac.qza
+
+qiime tools export \
+  --input-path NY_grouped_unifrac.qza \
+  --output-path ./NY_exported_unifrac
+
+qiime diversity beta-phylogenetic \
+  --i-phylogeny ../rooted-tree_silva.qza \
+  --i-table NY_grouped.qza \
+  --p-metric weighted_unifrac \
+  --o-distance-matrix NY_grouped_weightedunifrac.qza
+
+qiime tools export \
+  --input-path NY_grouped_weightedunifrac.qza \
+  --output-path ./NY_exported_weightedunifrac
+
+qiime diversity beta \
+  --i-table NY_grouped.qza \
+  --p-metric braycurtis \
+  --o-distance-matrix NY_grouped_braycurtis.qza
+
+qiime tools export \
+  --input-path NY_grouped_braycurtis.qza \
+  --output-path ./NY_exported_braycurtis
+
+###jaccard
+qiime diversity beta \
+  --i-table NY_grouped.qza \
+  --p-metric jaccard \
+  --o-distance-matrix NY_grouped_jaccard.qza
+
+qiime tools export \
+  --input-path NY_grouped_jaccard.qza \
+  --output-path ./NY_exported_jaccard
