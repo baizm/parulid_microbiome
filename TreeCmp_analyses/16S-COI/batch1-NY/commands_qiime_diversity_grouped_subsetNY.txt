@@ -1,0 +1,68 @@
+##script to generate diversity matricies, and grouped feature table for topology analysis with subset data in NY (2017-2019)
+
+#subset the feature table to only NY individuals
+qiime feature-table filter-samples \
+  --i-table ../../feature-table_diet_rare.qza \
+  --m-metadata-file individuals_ny.txt \
+  --o-filtered-table id-filtered-table.qza
+
+#note, this feature table was already rarefied in phyloseq.
+###was converted from #convert feature table to biom format in R, and imported to qiime
+
+##group by mean ceiling (rounds up so you don't have fractions of OTUs)
+qiime feature-table group \
+--i-table id-filtered-table.qza \
+--o-grouped-table feature-table_diet_rare_grouped.qza \
+--p-mode mean-ceiling \
+--m-metadata-file ../../../../16s_merged/metadata_16s_merged.tsv \
+--m-metadata-column Species \
+--p-axis sample
+
+qiime feature-table summarize \
+  --i-table feature-table_diet_rare_grouped.qza \
+  --o-visualization feature-table_diet_rare_grouped.qzv
+
+# core-metrics-phylogenetic requires rarefying and I already did, so calculate distance matrices separately
+
+#note: converted rooted tree to qza and imported to qiime
+qiime diversity beta-phylogenetic \
+  --i-phylogeny ../../tree-diet_rare.qza \
+  --i-table feature-table_diet_rare_grouped.qza \
+  --p-metric unweighted_unifrac \
+  --o-distance-matrix grouped_unifrac.qza
+
+qiime tools export \
+  --input-path grouped_unifrac.qza \
+  --output-path exported_unifrac
+
+qiime diversity beta-phylogenetic \
+  --i-phylogeny ../../tree-diet_rare.qza \
+  --i-table feature-table_diet_rare_grouped.qza \
+  --p-metric weighted_unifrac \
+  --o-distance-matrix grouped_weightedunifrac.qza
+
+qiime tools export \
+  --input-path grouped_weightedunifrac.qza \
+  --output-path exported_weightedunifrac
+
+qiime diversity beta \
+  --i-table feature-table_diet_rare_grouped.qza \
+  --p-metric braycurtis \
+  --o-distance-matrix grouped_braycurtis.qza
+
+qiime tools export \
+  --input-path grouped_braycurtis.qza \
+  --output-path exported_braycurtis
+
+#note: must convert distance matrices to dendrogram using R UPGMA
+#done in the diet & microbiome R script 
+
+##for jaccard
+qiime diversity beta \
+  --i-table feature-table_diet_rare_grouped.qza \
+  --p-metric jaccard \
+  --o-distance-matrix grouped_jaccard.qza
+
+qiime tools export \
+  --input-path grouped_jaccard.qza \
+  --output-path exported_jaccard
